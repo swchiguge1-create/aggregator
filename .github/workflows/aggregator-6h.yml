@@ -1,0 +1,46 @@
+name: Aggregator-6h
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+concurrency:
+  group: aggregator-6h
+  cancel-in-progress: false
+env:
+  TZ: Asia/Shanghai
+  PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
+  SKIP_ALIVE_CHECK: "false"
+  SKIP_REMARK: "false"
+  WORKFLOW_MODE: "0"
+  ENABLE_SPECIAL_PROTOCOLS: "true"
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Check secrets
+        run: |
+          if [ -z "$PUSH_TOKEN" ]; then
+            echo "Error: PUSH_TOKEN secret is empty"
+            exit 1
+          fi
+          if grep -q "__GIST_ID__" subscribe/config/my-config.json; then
+            echo "Error: my-config.json still contains __GIST_ID__ placeholder"
+            exit 1
+          fi
+      - name: Run aggregator (crawl, dedup, alive check, convert, push to Gist)
+        run: python -u subscribe/process.py -s subscribe/config/my-config.json --overwrite
+      - name: Timestamp
+        if: always()
+        run: date
